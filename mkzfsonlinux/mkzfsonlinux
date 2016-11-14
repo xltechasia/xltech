@@ -1,0 +1,204 @@
+#!/bin/bash
+
+readonly DISK1="/dev/disk/by-id/ata-Samsung_SSD_840_EVO_250GB_mSATA_S1KPNEAF200618T"
+readonly DISK2="/dev/disk/by-id/ata-Samsung_SSD_840_EVO_250GB_mSATA_S1KPNEAF200543E"
+
+apt-add-repository universe
+apt update
+apt --yes install openssh-server debootstrap gdisk zfs zfs-initramfs
+
+
+# DISK1 **************************************************
+
+# Kill all existing partition tables
+sgdisk --zap-all $DISK1
+
+# UEFI & Legacy BIOS partitioning
+sgdisk -a1  -n2:34:2047 -t2:EF02 $DISK1
+
+# UEFI If needed
+#sgdisk -n3:1M:+512M -t3:EF00 /dev/disk/by-id/$DISK1
+
+# UEFI & Legacy BIOS partitioning
+sgdisk      -n9:-8M:0   -t9:BF07 $DISK1
+sgdisk      -n1:0:0     -t1:BF01 $DISK1
+
+# DISK2 **************************************************
+
+# Kill all existing partition tables
+sgdisk --zap-all $DISK2
+
+# UEFI & Legacy BIOS partitioning
+sgdisk -a1  -n2:34:2047 -t2:EF02 $DISK2
+
+# UEFI If needed
+#sgdisk -n3:1M:+512M -t3:EF00 /dev/disk/by-id/$DISK2
+
+# UEFI & Legacy BIOS partitioning
+sgdisk      -n9:-8M:0   -t9:BF07 $DISK2
+sgdisk      -n1:0:0     -t1:BF01 $DISK2
+# ********************************************************
+
+# Flush writes to disk
+sync
+
+# Create Mirror Pool
+zpool create -f -o ashift=12 \
+    -O atime=off -O canmount=off -O compression=lz4 -O normalization=formD \
+    -O mountpoint=/ -R /mnt \
+    rpool mirror $DISK1-part1 $DISK2-part1
+
+# Filesystem Dataset
+zfs create -o canmount=off -o mountpoint=none rpool/ROOT
+
+# Root Filestem Dataset for Ubuntu
+zfs create -o canmount=noauto -o mountpoint=/ rpool/ROOT/ubuntu
+zfs mount rpool/ROOT/ubuntu
+
+# Core OS Datasets
+zfs create                  -o setuid=off               rpool/home
+zfs create -o mountpoint=/root                          rpool/home/root
+zfs create -o canmount=off  -o setuid=off   -o exec=off rpool/var
+zfs create -o com.sun:auto-snapshot=false               rpool/var/cache
+zfs create                                              rpool/var/log
+zfs create                                              rpool/var/spool
+zfs create -o com.sun:auto-snapshot=false   -o exec=on  rpool/var/tmp
+
+# Optional sets
+# If you use /srv on this system
+zfs create                                              rpool/srv
+
+# If this system will have games installed:
+zfs create												rpool/var/games
+
+# If this system will store local email in /var/mail:
+zfs create												rpool/var/mail
+
+# If this system will use NFS (locking):
+zfs create 	-o com.sun:auto-snapshot=false \
+			-o mountpoint=/var/lib/nfs					rpool/var/nfs
+
+# build basic Ubuntu environment
+chmod 1777 /mnt/var/tmp
+debootstrap xenial /mnt
+
+## Copy current working system over to new ZFS pool
+rsync -avxHAX / /mnt
+# Options used;
+#   -a  all files, with permissions etc
+#   -v  verbose
+#   -x  stay on one filesystem
+#   -H  preserve hardlinks
+#   -A  preserve ACLs/permissions
+#   -X  preserve extended attributes
+
+zfs set devices=off rpool
+
+
+#################################
+## Yet to clean-up/do ###########
+#echo $HOSTNAME > /mnt/etc/hostname
+# Use "127.0.1.1       FQDN $HOSTNAME" if the system has a real name in DN
+#echo "127.0.1.1       $HOSTNAME" >>/mnt/etc/hosts
+
+#################################
+## Yet to clean-up/do ###########
+#Configure the network interface:
+#Find the interface name:
+#       ifconfig -a
+# vi /mnt/etc/network/interfaces.d/NAME
+#       auto NAME
+#       iface NAME inet dhcp
+################################
+
+
+mount --rbind /dev  /mnt/dev
+mount --rbind /proc /mnt/proc
+mount --rbind /sys  /mnt/sys
+chroot /mnt /bin/bash --login
+
+
+#################################
+## Yet to clean-up/do ###########
+#locale-gen en_US.UTF-8
+#echo 'LANG="en_US.UTF-8"' > /etc/default/locale
+dpkg-reconfigure tzdata
+
+#vi /etc/apt/sources.list
+#   deb http://archive.ubuntu.com/ubuntu xenial main universe
+#   deb-src http://archive.ubuntu.com/ubuntu xenial main universe
+#   deb http://security.ubuntu.com/ubuntu xenial-security main universe
+#   deb-src http://security.ubuntu.com/ubuntu xenial-security main universe
+
+#   deb http://archive.ubuntu.com/ubuntu xenial-updates main universe
+#   deb-src http://archive.ubuntu.com/ubuntu xenial-updates main universe
+#ln -s /proc/self/mounts /etc/mtab
+#apt update
+#apt install --yes ubuntu-minimal
+
+#Install ZFS in the chroot environment for the new system:
+apt install --yes --no-install-recommends linux-image-generic
+apt install --yes zfs zfs-initramfs
+
+# For Legacy BIOS only system - Install GRUB for legacy (MBR) booting
+apt install --yes grub-pc
+
+# Else use following for UEFI system
+#apt install dosfstools
+#mkdosfs -F 32 -n EFI /dev/disk/by-id/scsi-SATA_disk1-part3
+#mkdir /boot/efi
+#echo PARTUUID=$(blkid -s PARTUUID -o value \
+#     /dev/disk/by-id/scsi-SATA_disk1-part3) \
+#     /boot/efi vfat defaults 0 1 >> /etc/fstab
+#mount /boot/efi
+#apt install --yes grub-efi-amd64
+
+# Setup system groups:
+addgroup --system lpadmin
+addgroup --system sambashare
+
+# Verify that the ZFS root filesystem is recognized:
+#grub-probe /
+#   zfs   <-- Expected result
+
+# Refresh the initrd files:
+update-initramfs -c -k all
+
+# Optional (but highly recommended): Make debugging GRUB easier:
+#vi /etc/default/grub
+#   - Comment out: GRUB_HIDDEN_TIMEOUT=0
+#   - Remove quiet and splash from: GRUB_CMDLINE_LINUX_DEFAULT
+#   - Uncomment: GRUB_TERMINAL=console
+#   - Save and quit.
+
+# Update the boot configuration:
+update-grub
+
+# Install the boot loader
+# For legacy (MBR) booting, install GRUB to the MBR:
+grub-install $DISK1
+grub-install $DISK2
+
+# Else for UEFI:
+#grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id=ubuntu --recheck --no-floppy
+
+# To Verify that the ZFS module is installed:
+#ls /boot/grub/*/zfs.mod
+
+#Snapshot the initial installation:
+zfs snapshot rpool/ROOT/ubuntu@install
+
+# exit chroot
+exit
+
+# Unmount filesystems
+mount | grep -v zfs | tac | awk '/\/mnt/ {print $3}' | xargs -i{} umount -lf {}
+zpool export rpool
+
+echo "Finished ZFS build on:"
+echo "  - $DISK1"
+echo "  - $DISK2"
+echo ""
+echo "You can reboot the system now"
+
+
