@@ -52,8 +52,10 @@ OPTIONS
                             maximum 2 drive failures for functioning pool
                     raidz3  n + 3 drives - minimum of 4 drives, >=5 recommended
                             maximum 3 drive failures for functioning pool
-    <disk0>
-    ...<disk9>  - Valid drives in /dev/disks/by-id/ to use for ZFS pool
+    -d <disk0>
+        ...
+    -d
+    <disk9>  - Valid drives in /dev/disks/by-id/ to use for ZFS pool
                     eg. ata-Samsung_SSD_850_EVO_M.2_250GB_S24BNX0H812345M
                     or  ata-ST4000DM000-2AE123_ZDH123AA
                   *** All drives passed will be reformatted - ALL partitions & data will be destroyed
@@ -109,6 +111,7 @@ partition_disks() {
             fi
         fi
         sync # Flush writes to disk
+        partprobe /dev/disk/by-id/$ZFSDISK
         printf "Done\n"
 
         printf "\tAdding common UEFI & Legacy BIOS partition..."
@@ -120,6 +123,7 @@ partition_disks() {
             fi
         fi
         sync # Flush writes to disk
+        partprobe /dev/disk/by-id/$ZFSDISK
         printf "Done\n"
 
         # UEFI Handling
@@ -133,6 +137,7 @@ partition_disks() {
                 fi
             fi
             sync # Flush writes to disk
+            partprobe /dev/disk/by-id/$ZFSDISK
             printf "Done\n"
         else
             printf "\tSkipping UEFI Parition Creation\n"
@@ -147,6 +152,7 @@ partition_disks() {
                 exit 1
             fi
         fi
+        partprobe /dev/disk/by-id/$ZFSDISK
         sync # Flush writes to disk
         printf "Done\n"
 
@@ -160,13 +166,14 @@ partition_disks() {
             fi
         fi
         sync # Flush writes to disk
+        partprobe /dev/disk/by-id/$ZFSDISK
         printf "Done\n"
     done
 } # partition_tables()
 
 
 create_pool() {
-    locale ZPOOLPARAMS=""
+    local ZPOOLPARAMS=""
 
     printf "\nCreating ZFS Pool %s as %s..." "$ZFSPOOL" "$ZFSTYPE"
 
@@ -189,13 +196,13 @@ create_pool() {
         fi
     else
         cat << EOF
-zpool create -f -o ashift=12 \
-                -O atime=off \
-                -O canmount=off \
-                -O compression=lz4 \
-                -O normalization=formD \
-                -O mountpoint=/ \
-                -R $ZFSMNTPOINT \
+zpool create -f -o ashift=12
+                -O atime=off
+                -O canmount=off
+                -O compression=lz4
+                -O normalization=formD
+                -O mountpoint=/
+                -R $ZFSMNTPOINT
                 $ZFSPOOL $ZFSTYPE $ZPOOLPARAMS
 EOF
     fi
@@ -482,6 +489,7 @@ fi
 
 if [ $DRYRUN -eq $TRUE -o $CANEXECUTE -eq $TRUE ]; then
     install_deps
+    unmount_zfs
     partition_disks
     create_pool
     create_sets
