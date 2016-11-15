@@ -4,7 +4,7 @@
 
 # TODO: --bootstrap option(s) to install minimal bootable environment as alternative to --cp or --install opts
 # TODO: --uefi untested/unfinished
-# TODO: --cp untested..
+# TODO: --cp untested/unfinished..
 
 # Constants
 readonly VERSION="0.1 Alpha"
@@ -473,6 +473,15 @@ EOF
 
     zfs snapshot $ZFSPOOL/ROOT/ubuntu@pre-reboot
 
+    for d in proc sys dev; do umount -lf $ZFSMNTPOINT/$d; done
+
+    printf "Done\n"
+
+    printf "Deleting Temporary ZFS set on %s..." "$UBIQUITYDEVICE"
+
+    zfs unmount -f $ZFSPOOL/$UBIQUITYZFSSET
+    zfs destroy $ZFSPOOL/$UBIQUITYZFSSET
+
     printf "Done\n"
 
 } # start_ubiquity()
@@ -606,6 +615,11 @@ while :; do
     esac
 done
 
+if [ $ZFSDISKCOUNT -lt $ZFSMINDISK ]; then
+    printf "\nERROR: Only %d Disks Specified - Require %d for %s ZFS Pool\n" $ZFSDISKCOUNT $ZFSMINDISK $ZFSTYPE >&2
+    exit 1
+fi
+
 if [ $DRYRUN -eq $TRUE ]; then
     printf "\n >>> Dry Run Mode Selected - Execution Flag Overide In Effect\n"
     CANEXECUTE=$FALSE
@@ -617,7 +631,7 @@ if [ $CANEXECUTE -eq $TRUE ]; then
 fi
 
 if [ $DRYRUN -eq $FALSE -a $CANEXECUTE -eq $FALSE ]; then
-    printf "\nExiting: --yes or --dry not specified"
+    printf "\nExiting: --yes or --dry not specified\n"
     exit 0
 fi
 
@@ -632,7 +646,8 @@ fi
 if [ $UBIQUITY -eq $TRUE ]; then
     start_ubiquity
 elif [ $CPWRKENV -eq $TRUE ]; then
-    copy_source
+    echo "O_o"
+    # copy_source
 fi
 
 unmount_zfs
