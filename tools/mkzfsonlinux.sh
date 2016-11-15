@@ -2,8 +2,9 @@
 # mkzfsonlinux.sh
 # see mkzfsonlinux.sh -h for info/help
 
-# TODO: add --continue option to skip partition & pool creation and pick up --cp or --install options
 # TODO: --bootstrap option(s) to install minimal bootable environment as alternative to --cp or --install opts
+# TODO: --uefi untested/unfinished
+# TODO: --cp untested..
 
 # Constants
 readonly VERSION="0.1 Alpha"
@@ -426,7 +427,7 @@ EOF
 
     printf "Launching Ubiquity Installer...\n"
 
-    sh -c '$UBIQUITYCMD $UBIQUITYARGS'
+    $UBIQUITYCMD $UBIQUITYARGS
 
     printf "Mounting Ubiquity Install Target (%s) to %s..." "$UBIQUITYDEVICE" "$UBIQUITYMNTPOINT"
     sync # Flush writes to disk
@@ -455,7 +456,7 @@ echo "nameserver 8.8.8.8" | tee -a /etc/resolv.conf
 apt update
 apt install --yes zfs zfs-initramfs
 sed -i 's|^GRUB_CMDLINE_LINUX=""|GRUB_CMDLINE_LINUX="boot=zfs rpool=$ZFSPOOL bootfs=$ZFSPOOL/ROOT/ubuntu"|' /etc/default/grub
-sed -i 's|^\(UUID=.*[[:space:]]/[[:space:]]\)|#\1|' fstab
+sed -i 's|^\(UUID=.*[[:space:]]/[[:space:]]\)|#\1|' /etc/fstab
 exit
 EOF
     for ZFSDISK in ${ZFSDISKLIST[@]}; do
@@ -472,7 +473,7 @@ EOF
 
     zfs snapshot $ZFSPOOL/ROOT/ubuntu@pre-reboot
 
-    printf "Done"
+    printf "Done\n"
 
 } # start_ubiquity()
 
@@ -588,7 +589,7 @@ while :; do
             shift
             ;;
         --continue) # Set continue flag to skip partioning and ZFS pool creation
-            printf "\tContinue Mode Active - Assuming Mounts, Disks, Partitions & Pools Match 100% paramaters passed\n"
+            printf "\tContinue Mode Active - Assuming Mounts, Disks, Partitions & Pools Match 100\% paramaters passed\n"
             CONTINUEMODE=$TRUE
             shift
             ;;
