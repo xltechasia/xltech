@@ -84,7 +84,7 @@ install_deps() {
     local APTPKGNAME
     apt-add-repository universe
     apt update
-    for APTPKGNAME in REQPKGS; do
+    for APTPKGNAME in $REQPKGS; do
         apt --yes install $APTPKGNAME
     done
 } # install_deps()
@@ -92,9 +92,11 @@ install_deps() {
 
 unmount_zfs() {
     # Unmount filesystems
+    printf "/nUnmounting All attached to %s..." "$ZFSMNTPOINT"
     # TODO: Change to ZFSMNTPOINT
     mount | grep -v zfs | tac | awk '/\/mnt/ {print $3}' | xargs -i{} umount -lf {}
     zpool export $ZFSPOOL
+    printf "Done\n"
 } #unmount_zfs()
 
 
