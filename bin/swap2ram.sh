@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# XLTech
-# see xlt -h for info/help
+# <name>
+# see <command> -h for info/help
 
 # Constants
-readonly XLTAPPNAME="xltech"
-readonly XLTAPPCMD="xlt"
-readonly XLTAPPDESC="XLTech front-end script to XLTech provided tools, applications & utilities in /opt/xltech"
+readonly XLTAPPNAME="<name>"
+readonly XLTAPPCMD="<command>"
+readonly XLTAPPDESC="<desc>"
 readonly XLTAPPVER="1.0"
 readonly XLTAPPREQPKGS=""
 readonly XLTAPPAUTH="Matthew@XLTech.io (Astro7467)"
@@ -28,8 +28,7 @@ SYNOPSIS
     $XLTAPPCMD [-h|--help] <options>
 
 DESCRIPTION
-    Front-end script to XLTech central and common access to scripts in /opt/xltech
-    Enables access to multiple utilities through a single command ($XLTAPPCMD) linked into /usr/local/bin
+
 
 OPTIONS
     -h|--help       Display this help
@@ -70,6 +69,17 @@ while :; do
             break
     esac
 done
+
+mem=$(free  | awk '/Mem:/ {print $4}')
+swap=$(free | awk '/Swap:/ {print $3}')
+
+if [ $mem -lt $swap ]; then
+    echo "ERROR: not enough RAM to write swap back, nothing done" >&2
+    exit 1
+fi
+
+swapoff -a &&
+swapon -a
 
 exit 0
 
