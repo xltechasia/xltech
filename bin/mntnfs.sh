@@ -67,7 +67,7 @@ AUTHOR
     $XLTAPPAUTH
 
 REPORTING BUGS
-    $APPBUGREPORT
+    $XLTBUGREPORT
 
 COPYRIGHT
     Copyright © 2016 XLTech  License GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>.
@@ -128,7 +128,7 @@ case "$1" in
             if grep -qsE "^([^ ])+ ${HERE}" /proc/mounts; then
             # NFS mount is still mounted; attempt umount
             log "As requested, unmounting NFS share ${HERE}."
-            umount -f "${HERE}"
+            umount -lf "${HERE}"
             rmdir -p "${HERE}"
             fi
         done
